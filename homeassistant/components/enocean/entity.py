@@ -1,5 +1,6 @@
 """Representation of an EnOcean device."""
 
+from enocean.protocol import constants as en
 from enocean.protocol.packet import Packet
 from enocean.utils import combine_hex
 
@@ -12,9 +13,10 @@ from .const import SIGNAL_RECEIVE_MESSAGE, SIGNAL_SEND_MESSAGE
 class EnOceanEntity(Entity):
     """Parent class for all entities associated with the EnOcean component."""
 
-    def __init__(self, dev_id: list[int]) -> None:
+    def __init__(self, dev_id: list[int], sender_id: list[int] | None = None) -> None:
         """Initialize the device."""
         self.dev_id = dev_id
+        self.sender_id = sender_id
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
@@ -33,7 +35,13 @@ class EnOceanEntity(Entity):
     def value_changed(self, packet):
         """Update the internal state of the device when a packet arrives."""
 
-    def send_command(self, data, optional, packet_type):
+    def send_command(self, command):
+        """Send a command via the EnOcean dongle with sender_id and default status."""
+        command.extend(self.sender_id)
+        command.extend([0x00])  # default status
+        self.send_raw_command(command, [], en.PACKET.RADIO)
+
+    def send_raw_command(self, data, optional, packet_type):
         """Send a command via the EnOcean dongle."""
 
         packet = Packet(packet_type, data=data, optional=optional)

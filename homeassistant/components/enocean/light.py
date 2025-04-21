@@ -38,7 +38,7 @@ PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_ID, default=[]): vol.All(cv.ensure_list, [vol.Coerce(int)]),
         vol.Required(CONF_SENDER_ID): vol.All(cv.ensure_list, [vol.Coerce(int)]),
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_SEND_EEP_SUB_COMMAND, default="0x02"): cv.positive_int,
+        vol.Optional(CONF_SEND_EEP_SUB_COMMAND, default=0x02): cv.positive_int,
     }
 )
 
@@ -50,12 +50,12 @@ def setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the EnOcean light platform."""
+    dev_id: list[int] = config[CONF_ID]
     sender_id: list[int] = config[CONF_SENDER_ID]
     dev_name: str = config[CONF_NAME]
-    dev_id: list[int] = config[CONF_ID]
     send_eep_sub_command: int = config[CONF_SEND_EEP_SUB_COMMAND]
 
-    add_entities([EnOceanLight(sender_id, dev_id, dev_name, send_eep_sub_command)])
+    add_entities([EnOceanLight(dev_id, sender_id, dev_name, send_eep_sub_command)])
 
 
 class EnOceanLight(EnOceanEntity, LightEntity):
@@ -63,17 +63,16 @@ class EnOceanLight(EnOceanEntity, LightEntity):
 
     def __init__(
         self,
-        sender_id: list[int],
         dev_id: list[int],
+        sender_id: list[int],
         dev_name: str,
         send_eep_sub_command: int,
     ) -> None:
         """Initialize the EnOcean light source."""
-        super().__init__(dev_id)
-        self._sender_id = sender_id
+        super().__init__(dev_id, sender_id)
         self._attr_unique_id = str(combine_hex(dev_id))
         self._attr_name = dev_name
-        self._send_eep_sub_command = send_eep_sub_command
+        self._attr_send_eep_sub_command = send_eep_sub_command
         self._attr_is_on = False
         if send_eep_sub_command == 0x01:
             self._attr_color_mode = ColorMode.ONOFF
@@ -100,18 +99,16 @@ class EnOceanLight(EnOceanEntity, LightEntity):
         # FUD14    [ORG 0x07, SUB_COMMAND 0x02, DIM_VALUE, DIM_SPEED, ON 0x09 OFF 0x08]
         # FSR14-2x [ORG 0x07, SUB_COMMAND 0x01, UNUSED, UNUSED, ON 0x09 OFF 0x08]
 
-        command = [en.RORG.BS4, self._send_eep_sub_command, bval, dim_speed, 0x09]
-        command.extend(self._sender_id)
-        command.extend([0x00])
-        self.send_command(command, [], en.PACKET.RADIO)
+        self.send_command(
+            [en.RORG.BS4, self._attr_send_eep_sub_command, bval, dim_speed, 0x09]
+        )
         self._attr_is_on = True
 
     def turn_off(self, **kwargs: Any) -> None:
         """Turn the light source off."""
-        command = [en.RORG.BS4, self._send_eep_sub_command, 0x00, 0x00, 0x08]
-        command.extend(self._sender_id)
-        command.extend([0x00])
-        self.send_command(command, [], en.PACKET.RADIO)
+        self.send_command(
+            [en.RORG.BS4, self._attr_send_eep_sub_command, 0x00, 0x00, 0x08]
+        )
         self._attr_is_on = False
 
     def value_changed(self, packet):
